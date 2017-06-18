@@ -15,6 +15,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.scheduler.BukkitRunnable;
 
 import me.fatpigsarefat.chatreport.ChatReport;
 import me.fatpigsarefat.chatreport.utils.Report;
@@ -41,38 +42,19 @@ public class ChatreportCommand implements CommandExecutor {
 				Player player = (Player) sender;
 				if (player.hasPermission("chatreport.view")) {
 					if (args[0].equals("view")) {
-						if (args.length == 1) {
-							Inventory inv = Bukkit.createInventory(null, 54, ChatColor.RESET.toString() + "Chat Reports");
-							for (Report r : ChatReport.getReportManager().getReports()) {
-								String configKey = "";
-								for (String s : ChatReport.getInstance().getConfig().getConfigurationSection("report-reasons").getKeys(false)) {
-									if (ChatReport.getInstance().getConfig().getString("report-reasons." + s + ".name").equals(r.getReason())) {
-										configKey = s;
-									}
+						if (ChatReport.isUsingDatabase()) {
+							new BukkitRunnable() {
+
+								@Override
+								public void run() {
+									player.sendMessage(ChatColor.GREEN + "Synchronising reports...");
+									ChatReport.getReportManager().pullMainThread();
+									commandCont(args, player);
 								}
-								ItemStack is = new ItemStack(Material.getMaterial(configKey == "" ? "STONE" : ChatReport.getInstance().getConfig().getString("report-reasons." + configKey + ".itemstack.type")));
-								ItemMeta ism = is.getItemMeta();
-								ism.setDisplayName(ChatColor.RED + "#" + r.getId());
-								List<String> isl = new ArrayList<String>();
-								isl.add(ChatColor.GRAY + " * Reason: " + ChatColor.RED + r.getReason());
-								SimpleDateFormat sdf = new SimpleDateFormat("d/M/y");
-						        Date now = new Date();
-								isl.add(ChatColor.GRAY + " * Created on: " + ChatColor.RED + sdf.format(r.getCreationDate()));
-								isl.add(ChatColor.GRAY + " * Time ago: " + ChatColor.RED  + TimeUnit.MILLISECONDS.toHours(now.getTime() - r.getCreationDate().getTime()) + "h");
-								isl.add(ChatColor.GRAY + " * Username: " + ChatColor.RED + r.getPlayerName());
-								isl.add(" ");
-								isl.add(ChatColor.GRAY + "Left-click to view");
-								ism.setLore(isl);
-								is.setItemMeta(ism);
-								inv.addItem(is);
-							}
-							player.openInventory(inv);
+							
+							}.runTaskAsynchronously(ChatReport.getInstance());
 						} else {
-							if (ChatReport.getReportManager().getReport(args[1]) == null) {
-								player.sendMessage(ChatColor.RED + "No report was found by the id #" + args[1]);
-							} else {
-								openChatReport(player, args[1]);
-							}
+							commandCont(args, player);
 						}
 						return true;
 					}
@@ -90,6 +72,9 @@ public class ChatreportCommand implements CommandExecutor {
 									}
 								}
 								ChatReport.getReportManager().deleteReport(args[1]);
+								if (ChatReport.isUsingDatabase()) {
+									ChatReport.getReportManager().push();
+								}
 							}
 						}
 						return true;
@@ -119,6 +104,42 @@ public class ChatreportCommand implements CommandExecutor {
 			return true;
 		}
 		return false;
+	}
+	
+	private void commandCont(String[] args, Player player) {
+		if (args.length == 1) {
+			Inventory inv = Bukkit.createInventory(null, 54, ChatColor.RESET.toString() + "Chat Reports");
+			for (Report r : ChatReport.getReportManager().getReports()) {
+				String configKey = "";
+				for (String s : ChatReport.getInstance().getConfig().getConfigurationSection("report-reasons").getKeys(false)) {
+					if (ChatReport.getInstance().getConfig().getString("report-reasons." + s + ".name").equals(r.getReason())) {
+						configKey = s;
+					}
+				}
+				ItemStack is = new ItemStack(Material.getMaterial(configKey == "" ? "STONE" : ChatReport.getInstance().getConfig().getString("report-reasons." + configKey + ".itemstack.type")));
+				ItemMeta ism = is.getItemMeta();
+				ism.setDisplayName(ChatColor.RED + "#" + r.getId());
+				List<String> isl = new ArrayList<String>();
+				isl.add(ChatColor.GRAY + " * Reason: " + ChatColor.RED + r.getReason());
+				SimpleDateFormat sdf = new SimpleDateFormat("d/M/y");
+		        Date now = new Date();
+				isl.add(ChatColor.GRAY + " * Created on: " + ChatColor.RED + sdf.format(r.getCreationDate()));
+				isl.add(ChatColor.GRAY + " * Time ago: " + ChatColor.RED  + TimeUnit.MILLISECONDS.toHours(now.getTime() - r.getCreationDate().getTime()) + "h");
+				isl.add(ChatColor.GRAY + " * Username: " + ChatColor.RED + r.getPlayerName());
+				isl.add(" ");
+				isl.add(ChatColor.GRAY + "Left-click to view");
+				ism.setLore(isl);
+				is.setItemMeta(ism);
+				inv.addItem(is);
+			}
+			player.openInventory(inv);
+		} else {
+			if (ChatReport.getReportManager().getReport(args[1]) == null) {
+				player.sendMessage(ChatColor.RED + "No report was found by the id #" + args[1]);
+			} else {
+				openChatReport(player, args[1]);
+			}
+		}
 	}
 	
 	public static void openChatReport(Player player, String id) {

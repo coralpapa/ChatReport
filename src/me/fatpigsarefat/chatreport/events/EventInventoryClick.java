@@ -44,6 +44,9 @@ public class EventInventoryClick implements Listener {
 					}
 				}
 				ChatReport.getReportManager().deleteReport(id);
+				if (ChatReport.isUsingDatabase()) {
+					ChatReport.getReportManager().push();
+				}
 				player.closeInventory();
 			}
 		} else if (event.getInventory().getName().contains(ChatColor.RESET.toString() + "Chat Report: ") && ChatReport.getReportManager().isReporting(event.getWhoClicked().getName())) {
@@ -64,6 +67,9 @@ public class EventInventoryClick implements Listener {
 				if (event.getCurrentItem().equals(is)) {
 					Player player = (Player) event.getWhoClicked();
 					Report r = ChatReport.getReportManager().createReport(ChatReport.getReportManager().getReporting(event.getWhoClicked().getName()), ChatReport.getInstance().getConfig().getString("report-reasons." + s + ".name"));
+					if (ChatReport.isUsingDatabase()) {
+						ChatReport.getReportManager().push();
+					}
 					String messageToModerator = ChatColor.translateAlternateColorCodes('&', ChatReport.getInstance().getConfig().getString("messages.report-created-moderator"));
 					messageToModerator = messageToModerator.replace("%reporter%", event.getWhoClicked().getName());
 					messageToModerator = messageToModerator.replace("%id%", r.getId());

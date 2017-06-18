@@ -2,6 +2,7 @@ package me.fatpigsarefat.chatreport;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.logging.Level;
 
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -20,6 +21,7 @@ import me.fatpigsarefat.chatreport.nms.Chat_v1_8_R2;
 import me.fatpigsarefat.chatreport.nms.Chat_v1_8_R3;
 import me.fatpigsarefat.chatreport.nms.Chat_v1_9_R1;
 import me.fatpigsarefat.chatreport.nms.Chat_v1_9_R2;
+import me.fatpigsarefat.chatreport.utils.DatabaseConnection;
 import me.fatpigsarefat.chatreport.utils.ReportManager;
 
 public class ChatReport extends JavaPlugin {
@@ -28,6 +30,8 @@ public class ChatReport extends JavaPlugin {
 	private static ReportManager reportManager;
 	private static Chat chatButton;
 	private static boolean chatSupported;
+	private static boolean databaseSync;
+	private DatabaseConnection dbConn;
 
 	@Override
 	public void onEnable() {
@@ -46,14 +50,23 @@ public class ChatReport extends JavaPlugin {
 		Bukkit.getPluginManager().registerEvents(new EventPlayerJoin(), this);
 		Bukkit.getPluginManager().registerEvents(new EventInventoryClose(), this);
 		getServer().getPluginCommand("chatreport").setExecutor(new ChatreportCommand());
-		reportManager = new ReportManager();
-		reportManager.pull();
 		if (setupChat()) {
 			chatSupported = true;
 		} else {
 			chatSupported = false;
 		}
-		if (getConfig().getBoolean("chathistory.autosave")) {
+		if (getConfig().getBoolean("mysql.enabled")) {
+			dbConn = new DatabaseConnection(getConfig().getString("mysql.database"),
+					getConfig().getString("mysql.username"), getConfig().getString("mysql.password"));
+			String response = dbConn.connect();
+			if (response.equals("Database initialized.")) {
+				databaseSync = true;
+			}
+			Bukkit.getLogger().log(Level.INFO, response);
+		}
+		reportManager = new ReportManager();
+		reportManager.pullMainThread();
+		if (getConfig().getBoolean("chathistory.autosave") && !getConfig().getBoolean("mysql.enabled")) {
 			new BukkitRunnable() {
 
 				@Override
@@ -63,11 +76,28 @@ public class ChatReport extends JavaPlugin {
 
 			}.runTaskTimer(this, 12000L, 12000L);
 		}
+		new BukkitRunnable() {
+
+			@Override
+			public void run() {
+				
+				reportManager.pull();
+			}
+
+		}.runTaskTimer(this, getConfig().getInt("mysql.sync") * 20, getConfig().getInt("mysql.sync") * 20);
+	}
+
+	public static boolean isUsingDatabase() {
+		return databaseSync;
+	}
+
+	public DatabaseConnection getDatabaseConnection() {
+		return dbConn;
 	}
 
 	@Override
 	public void onDisable() {
-		reportManager.push();
+		reportManager.pushMainThread();
 	}
 
 	public static boolean isChatSupported() {
